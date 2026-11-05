@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>D.A Arrears Calculator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f6f8; --card:#ffffff; --text:#1a2230; --muted:#6b7686;
+    --border:#e2e6ec; --accent:#2563eb; --accent-text:#ffffff;
+    --head:#1e293b; --head-text:#f1f5f9; --danger:#dc2626; --total:#eef2ff;
+    box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f1420; --card:#171e2c; --text:#e6e9ef; --muted:#93a0b4;
+      --border:#2a3444; --accent:#3b82f6; --accent-text:#ffffff;
+      --head:#0b1220; --head-text:#e6e9ef; --danger:#f87171; --total:#1c2740;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1420; --card:#171e2c; --text:#e6e9ef; --muted:#93a0b4;
+    --border:#2a3444; --accent:#3b82f6; --accent-text:#ffffff;
+    --head:#0b1220; --head-text:#e6e9ef; --danger:#f87171; --total:#1c2740;
+  }
+  html{scroll-padding-top:env(safe-area-inset-top,0px); height:100%;}
+  body{height:100%; margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    font-size:14px; padding:14px;}
+  h1{font-size:17px; margin:0 0 12px; line-height:1.3;}
+  .card{background:var(--card); border:1px solid var(--border); border-radius:12px;
+    padding:14px; margin-bottom:12px;}
+  .meta-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .rates-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:10px;}
+  label{display:block; font-size:11px; color:var(--muted); margin-bottom:3px;}
+  input,select{width:100%; box-sizing:border-box; background:transparent; color:var(--text);
+    border:1px solid var(--border); border-radius:7px; padding:7px 8px; font-size:13px;}
+  input:focus,select:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  .table-wrap{overflow-x:auto; overflow-y:auto; max-height:50vh; border:1px solid var(--border);
+    border-radius:10px; -webkit-overflow-scrolling:touch;}
+  table{border-collapse:collapse; width:100%; min-width:820px; table-layout:fixed;}
+  colgroup col:nth-child(1){width:14%;} colgroup col:nth-child(2){width:10%;}
+  colgroup col:nth-child(3){width:10%;} colgroup col:nth-child(4){width:10%;}
+  colgroup col:nth-child(5){width:10%;} colgroup col:nth-child(6){width:8%;}
+  colgroup col:nth-child(7){width:11%;} colgroup col:nth-child(8){width:10%;}
+  colgroup col:nth-child(9){width:11%;} colgroup col:nth-child(10){width:6%;}
+  th,td{padding:7px 8px; text-align:right; white-space:nowrap; border-bottom:1px solid var(--border);
+    overflow:hidden; text-overflow:ellipsis;}
+  th:first-child,td:first-child{text-align:left;}
+  thead th{position:sticky; top:0; background:var(--head); color:var(--head-text); z-index:3; font-size:11.5px;}
+  th.grp{background:var(--accent); font-size:10.5px; text-align:center;}
+  tbody td input{width:100%; text-align:right; padding:5px 6px; font-size:12.5px;}
+  tbody td:first-child input{text-align:left;}
+  .calc{color:var(--muted); font-variant-numeric:tabular-nums;}
+  .rowbtn{background:none; border:none; color:var(--danger); font-size:16px; cursor:pointer; padding:2px 6px;}
+  tfoot td{position:sticky; bottom:0; background:var(--total); font-weight:700; border-top:2px solid var(--border); z-index:2;}
+  .actions{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;}
+  button.primary{background:var(--accent); color:var(--accent-text); border:none; border-radius:8px;
+    padding:9px 14px; font-size:13px; font-weight:600; cursor:pointer;}
+  button.ghost{background:transparent; color:var(--text); border:1px solid var(--border); border-radius:8px;
+    padding:9px 14px; font-size:13px; cursor:pointer;}
+  .hint{font-size:11px; color:var(--muted); margin-top:8px;}
+  .summary-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+  .stat{background:var(--total); border-radius:9px; padding:10px 8px; text-align:center;}
+  .stat label{color:var(--muted); font-size:10.5px; margin-bottom:4px;}
+  .stat-val{font-size:16px; font-weight:700; font-variant-numeric:tabular-nums;}
+  .picker{display:none; gap:10px; align-items:end; margin-top:12px; padding:12px; background:var(--bg);
+    border:1px solid var(--border); border-radius:9px; flex-wrap:wrap;}
+  .picker.open{display:flex;}
+  .picker .field{flex:1; min-width:110px;}
+</style>
+</head>
+<body>
+
+<h1>D.A. Arrears Statement</h1>
+
+<div class="card">
+  <div class="summary-grid">
+    <div class="stat"><label>Gross Amount</label><div class="stat-val" id="sumGross">0</div></div>
+    <div class="stat"><label>Cps Amount</label><div class="stat-val" id="sumCpsAmt">0</div></div>
+    <div class="stat"><label>Net Amount</label><div class="stat-val" id="sumNet">0</div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="meta-grid">
+    <div><label>Employee Name</label><input id="empName"></div>
+    <div><label>Employee Id</label><input id="slNo"></div>
+  </div>
+  <div class="rates-grid">
+    <div><label>New DA Rate (%)</label><input id="newRate" type="number" step="0.01"></div>
+    <div><label>Old DA Rate (%)</label><input id="oldRate" type="number" step="0.01"></div>
+    <div><label>CPS Rate (%)</label><input id="cpsRate" type="number" step="0.01"></div>
+    <div><label>Installment</label><input id="divisor" type="number" step="1"></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <colgroup><col><col><col><col><col><col><col><col><col><col></colgroup>
+      <thead>
+        <tr>
+          <th>Month</th><th>Basic</th><th>New DA</th><th>Old DA</th>
+          <th>Difference</th><th>CPS</th>
+          <th class="grp">Gross Amt</th><th class="grp">Cps Amt</th><th class="grp">Net Amt</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+      <tfoot>
+        <tr>
+          <td>TOTAL</td><td></td><td></td><td></td>
+          <td id="tDiff">0</td><td id="tCps">0</td><td id="tGross">0</td><td></td><td id="tNet">0</td><td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="picker" id="picker">
+    <div class="field" id="monthField"><label>Month</label>
+      <select id="pickMonth"></select>
+    </div>
+    <div class="field"><label>Year</label>
+      <select id="pickYear"></select>
+    </div>
+    <button class="primary" id="confirmAdd">Add</button>
+    <button class="ghost" id="cancelAdd">Cancel</button>
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="addMonth">+ Add month</button>
+    <button class="ghost" id="addSurrender">+ Add surrender</button>
+    <button class="ghost" id="exportBtn">⬇ Download as Excel</button>
+  </div>
+  <div class="hint">New DA = round(Basic × New DA rate) · Old DA = round(Basic × Old DA rate) · Difference = New DA − Old DA · CPS = round(Difference × CPS rate) · Gross Amount = Difference − CPS · Cps Amount = round(Difference ÷ Installment) · Net Amount = round(Cps Amount − CPS ÷ Installment).</div>
+</div>
+
+<script>
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DEFAULT_STATE = {
+  empName: "IZHAAN MOHIUDDIN, FF E.No. 4509990",
+  slNo: "10",
+  newRate: 30.03, oldRate: 26.39, cpsRate: 10, divisor: 28,
+  rows: [
+    ["March,24",14098],["April,24",24280],["May,24",24280],["June,24",24280],
+    ["July,24",24280],["August,24",24280],["September,24",24280],["October,24",24280],
+    ["November,24",24280],["December,24",24280],["January,25",24280],["February,25",24280],
+    ["March,25",24970],["April,25",24970],["May,25",24970]
+  ]
+};
+
+let state = null;
+let pickerMode = "month";
+let rowRefs = []; // {basicInput, cells:{newDA,oldDA,diff,cps,gross,cpsAmt,net}}
+const el = id => document.getElementById(id);
+
+function loadState(){
+  try{
+    const saved = localStorage.getItem('daArrearsState');
+    if(saved) return JSON.parse(saved);
+  }catch(e){}
+  return JSON.parse(JSON.stringify(DEFAULT_STATE));
+}
+function saveState(){
+  try{ localStorage.setItem('daArrearsState', JSON.stringify(state)); }catch(e){}
+}
+
+function round(n){ return Math.round((n||0) + Number.EPSILON * Math.sign(n||0)); }
+
+function computeRow(basic){
+  const nr = (parseFloat(el('newRate').value)||0)/100;
+  const or_ = (parseFloat(el('oldRate').value)||0)/100;
+  const cr = (parseFloat(el('cpsRate').value)||0)/100;
+  const div = parseFloat(el('divisor').value)||28;
+  const newDA = round(basic*nr);
+  const oldDA = round(basic*or_);
+  const diff = newDA - oldDA;
+  const cps = round(diff*cr);
+  const gross = diff - cps;
+  const cpsAmt = round(diff/div);
+  const net = round(cpsAmt - (cps/div));
+  return {newDA, oldDA, diff, cps, gross, cpsAmt, net};
+}
+
+function parseMonthYear(label){
+  const m = /^\s*([A-Za-z]+)\s*,\s*(\d+)\s*$/.exec(label||"");
+  if(!m) return null;
+  const idx = MONTHS.findIndex(x => x.toLowerCase() === m[1].toLowerCase());
+  if(idx === -1) return null;
+  return {idx, yy: parseInt(m[2],10)};
+}
+
+function findNovemberBasic(){
+  const r = state.rows.find(r => /november/i.test(r[0]||""));
+  return r ? r[1] : 0;
+}
+
+function populatePicker(){
+  const monthSel = el('pickMonth'), yearSel = el('pickYear');
+  monthSel.innerHTML = MONTHS.map((m,i) => `<option value="${i}">${m}</option>`).join('');
+  let years = [];
+  for(let y=20; y<=40; y++) years.push(y);
+  yearSel.innerHTML = years.map(y => `<option value="${y}">20${String(y).padStart(2,'0')}</option>`).join('');
+
+  const last = state.rows[state.rows.length-1];
+  const py = last ? parseMonthYear(last[0]) : null;
+  let defIdx = py ? py.idx+1 : new Date().getMonth();
+  let defYy = py ? py.yy : 26;
+  if(defIdx === 12){ defIdx = 0; defYy += 1; }
+  monthSel.value = String(defIdx);
+  yearSel.value = String(defYy);
+}
+
+function openPicker(mode){
+  pickerMode = mode;
+  populatePicker();
+  el('monthField').style.display = mode === 'month' ? '' : 'none';
+  el('picker').classList.add('open');
+}
+function closePicker(){ el('picker').classList.remove('open'); }
+
+// Recompute just the calculated cells of one row (does not touch inputs, so focus/cursor stays put)
+function recomputeRow(i){
+  const ref = rowRefs[i];
+  if(!ref) return;
+  const c = computeRow(state.rows[i][1]);
+  ref.cells.newDA.textContent = c.newDA;
+  ref.cells.oldDA.textContent = c.oldDA;
+  ref.cells.diff.textContent = c.diff;
+  ref.cells.cps.textContent = c.cps;
+  ref.cells.gross.textContent = c.gross;
+  ref.cells.cpsAmt.textContent = c.cpsAmt;
+  ref.cells.net.textContent = c.net;
+  return c;
+}
+
+function recomputeSums(){
+  let sums = {diff:0, cps:0, gross:0, cpsAmt:0, net:0};
+  state.rows.forEach(r => {
+    const c = computeRow(r[1]);
+    sums.diff += c.diff; sums.cps += c.cps; sums.gross += c.gross; sums.cpsAmt += c.cpsAmt; sums.net += c.net;
+  });
+  el('tDiff').textContent = sums.diff;
+  el('tCps').textContent = sums.cps;
+  el('tGross').textContent = sums.gross;
+  el('tNet').textContent = sums.net;
+  el('sumGross').textContent = sums.gross;
+  el('sumCpsAmt').textContent = sums.cpsAmt;
+  el('sumNet').textContent = sums.net;
+}
+
+function recomputeAllRows(){
+  state.rows.forEach((r,i) => recomputeRow(i));
+  recomputeSums();
+}
+
+// Full rebuild: only called on load, add row, delete row (structural changes)
+function buildRows(){
+  el('empName').value = state.empName;
+  el('slNo').value = state.slNo;
+  el('newRate').value = state.newRate;
+  el('oldRate').value = state.oldRate;
+  el('cpsRate').value = state.cpsRate;
+  el('divisor').value = state.divisor;
+
+  const tbody = el('rows');
+  tbody.innerHTML = "";
+  rowRefs = [];
+
+  state.rows.forEach((r, i) => {
+    const [month, basic] = r;
+    const c = computeRow(basic);
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input data-i="${i}" data-f="month" value="${month}"></td>
+      <td><input data-i="${i}" data-f="basic" type="number" inputmode="decimal" value="${basic}"></td>
+      <td class="calc" data-c="newDA">${c.newDA}</td>
+      <td class="calc" data-c="oldDA">${c.oldDA}</td>
+      <td class="calc" data-c="diff">${c.diff}</td>
+      <td class="calc" data-c="cps">${c.cps}</td>
+      <td class="calc" data-c="gross">${c.gross}</td>
+      <td class="calc" data-c="cpsAmt">${c.cpsAmt}</td>
+      <td class="calc" data-c="net">${c.net}</td>
+      <td><button class="rowbtn" data-del="${i}" title="Remove row">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+
+    const cells = {};
+    tr.querySelectorAll('[data-c]').forEach(td => { cells[td.dataset.c] = td; });
+    rowRefs.push({ tr, cells });
+
+    tr.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('input', e => {
+        const idx = parseInt(e.target.dataset.i,10);
+        const f = e.target.dataset.f;
+        if(f === 'month'){
+          state.rows[idx][0] = e.target.value;
+        } else {
+          state.rows[idx][1] = parseFloat(e.target.value) || 0;
+          recomputeRow(idx);
+          recomputeSums();
+        }
+        saveState();
+      });
+    });
+    tr.querySelector('[data-del]').addEventListener('click', e => {
+      const idx = parseInt(e.target.dataset.del,10);
+      if(state.rows.length > 1){
+        state.rows.splice(idx,1);
+        saveState();
+        buildRows();
+        recomputeSums();
+      }
+    });
+  });
+
+  recomputeSums();
+}
+
+['newRate','oldRate','cpsRate','divisor'].forEach(id => {
+  el(id).addEventListener('input', () => {
+    state.newRate = parseFloat(el('newRate').value)||0;
+    state.oldRate = parseFloat(el('oldRate').value)||0;
+    state.cpsRate = parseFloat(el('cpsRate').value)||0;
+    state.divisor = parseFloat(el('divisor').value)||28;
+    saveState();
+    recomputeAllRows();
+  });
+});
+['empName','slNo'].forEach(id => {
+  el(id).addEventListener('input', () => {
+    state.empName = el('empName').value;
+    state.slNo = el('slNo').value;
+    saveState();
+  });
+});
+
+el('addMonth').addEventListener('click', () => openPicker('month'));
+el('addSurrender').addEventListener('click', () => openPicker('surrender'));
+el('cancelAdd').addEventListener('click', closePicker);
+
+el('confirmAdd').addEventListener('click', () => {
+  const yy = el('pickYear').value;
+  let label, basic;
+  if(pickerMode === 'month'){
+    const mi = parseInt(el('pickMonth').value,10);
+    label = MONTHS[mi] + "," + yy;
+    const last = state.rows[state.rows.length-1];
+    basic = last ? last[1] : 0;
+  } else {
+    label = "Surrender," + yy;
+    basic = round(findNovemberBasic()/2);
+  }
+  state.rows.push([label, basic]);
+  saveState();
+  closePicker();
+  buildRows();
+  const wrap = document.querySelector('.table-wrap');
+  wrap.scrollTop = wrap.scrollHeight;
+});
+
+el('exportBtn').addEventListener('click', async () => {
+  try{
+    const aoa = [];
+    aoa.push([]);
+    aoa.push([]);
+    aoa.push([]);
+    aoa.push(["Month","Basic","New DA","Old DA","Difference","CPS","Installment","Installment","Installment"]);
+    aoa.push(["", "", (state.newRate||0)/100, (state.oldRate||0)/100, "", (state.cpsRate||0)/100, "Gross Amount", "Cps Amount", "Net Amount"]);
+    state.rows.forEach((r) => {
+      const [month, basic] = r;
+      const c = computeRow(basic);
+      aoa.push([month, basic, c.newDA, c.oldDA, c.diff, c.cps, c.gross, c.cpsAmt, c.net]);
+    });
+    let sums = {diff:0,cps:0,gross:0,net:0};
+    state.rows.forEach(r => { const c = computeRow(r[1]); sums.diff+=c.diff; sums.cps+=c.cps; sums.gross+=c.gross; sums.net+=c.net; });
+    aoa.push(["", "", "", "", sums.diff, sums.cps, sums.gross, "", sums.net]);
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "DA Arrears");
+    const wbout = XLSX.write(wb, {type:'array', bookType:'xlsx'});
+    if (window.AndroidDownload && window.AndroidDownload.saveBase64) {
+      const bytes = new Uint8Array(wbout);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      window.AndroidDownload.saveBase64(btoa(binary), 'DA_Arrears_Statement.xlsx');
+      return;
+    }
+    const blob = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = "DA_Arrears_Statement.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }catch(err){
+    alert("Couldn't export the file.");
+  }
+});
+
+state = loadState();
+buildRows();
+</script>
+</body>
+</html>
